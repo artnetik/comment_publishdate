@@ -1,0 +1,188 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *  Comment publishdate module
+ *
+ *  Omogoca spremljanje, kdaj je bil komentar prvic objavljen 'published'.
+ */
+ 
+
+/**
+ * Implementation of hook_form_FORM_ID_alter();
+ */
+function comment_publishdate_form_comment_form_alter($form, &$form_state) {
+		
+	global $user;
+	
+	// Datum odgovora (ko je bil komentar prvic objavljen)	
+	if (arg(0) == 'comment' && arg(1) == 'edit' && is_numeric(arg(2))){
+		$cid = arg(2);
+		$comment_published = (comment_publishdate_get($cid))? date('d-m-Y h:i', comment_publishdate_get($cid)): t('undefined');
+	
+		// Spremembe forme
+		$form['admin']['author']['#weight'] = -2;
+		$form['admin']['date']['#size'] = 30;
+		$form['admin']['objavljeno'] = array(
+			'#type' 	=> 'textfield',
+			'#title'	=> t('Comment published'),
+			'#default_value' 	=> $comment_published,
+			'#size' => 30,
+			'#weight'	=> 0,
+			'#disabled' => TRUE,
+		);
+		$form['admin']['status']['#weight'] = 1;
+		// Link za ogled posameznega komentarja
+		$form['singlecomment'] = array(
+			'#type'		=> 'markup',
+			'#weight'	=> 2,
+			'#value'	=> l('Comment details', 'comment/publishdate/' . $cid, array('attributes' => array('id' => 'comment-details'))),
+		);
+	}
+	
+}
+
+
+/**
+ * Implementation of hook_comment()
+ */
+function comment_publishdate_comment(&$a1, $op){
+
+	switch($op){
+	
+		// Ko je komentar objavljen v bazo zapišemo timestamp objave.
+		case 'publish': 
+			
+			if (arg(0) == 'comment' && arg(1) == 'edit' && is_numeric(arg(2))){
+				$cid = arg(2);
+				comment_publishdate_set($cid);
+			}
+			
+		break;
+	}
+
+}
+
+/**
+ * Preverimo ce je publish timestamp za dolocen komentar že v bazi.
+ *
+ * @param $cid
+ *  Comment ID.
+ * @return
+ *  Cas prve objave v unix timestamp obliki ce zapis obstaja, sicer FASLE.
+ */
+function comment_publishdate_get($cid){
+	
+	if ($cid && is_numeric($cid)) {
+	
+		$sql = 'SELECT publishdate FROM {comment_publishdate} WHERE cid = %d';
+		$result = db_query($sql, $cid);
+		$timestamp = db_fetch_array($result);
+		
+		if ($timestamp){
+			return $timestamp['publishdate'];
+		}
+		else {
+			return FALSE;
+		}
+		
+	}
+	
+}
+
+/**
+ * V bazo zapiše timestamp objave.
+ *
+ * @param (int)$cid
+ *  Comment ID.
+ */
+function comment_publishdate_set($cid) {
+
+  if ($cid && is_numeric($cid)) {
+	
+		if(comment_publishdate_get($cid) == FALSE) {
+		
+			$sql = 'INSERT INTO {comment_publishdate} (cid, publishdate) VALUES (%d, %d)';
+			(int)$timestamp = time();
+			db_query($sql, $cid, $timestamp);		
+			
+		}
+			
+	}
+	
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function comment_publishdate_menu(){
+	$items['comment/publishdate/%'] = array(
+		'title' => 'Show comment',
+		'title callback' => 'show_comment_title_callback',
+		'title arguments' => array(2),
+		'page callback' => 'show_single_comment',
+		'page arguments' => array(2),
+		'access arguments' => array('administer comments'),
+		'type' => MENU_CALLBACK,
+	);
+	return $items;
+}
+
+/**
+ * Title callback za pogled posameznega komentarja.
+ *
+ * @param $cid
+ *  Comment id.
+ */
+
+//TODO: grdo. Mogoče bi mogla imeti tablea še en stolpec z nid-i.
+function show_comment_title_callback($cid) {
+	$comment = _comment_load($cid);
+	$node = node_load($comment->nid);
+	drupal_set_title($node->title);
+}
+
+/**
+ * Implemetation of hook_link().
+ */
+function comment_publishdate_link($type, $object, $teaser = FALSE){
+	if ($type == 'comment'){
+		$links['preglej_komentar'] = array(
+			'title' => t('Comment details'),
+			'href' => 'comment/publishdate/' . $object->cid,
+		);
+		return $links;
+	}
+}
+
+/**
+ * Show single comment.
+ *
+ * Prikaže posamezen komentar.
+ *
+ * @param $cid
+ *  Comment id tega komentarja.
+ */
+ 
+// TODO: To bi lahko naredili s theme funkcijo.
+function show_single_comment($cid) {
+	
+	$comment = _comment_load($cid);
+	$comment_user = user_load($comment->uid);
+	
+	$comment_user_details = $comment_user->profile_name . ' ' . $comment_user->profile_surname . ' (' . $comment_user->name . ') - ' . $comment_user->profile_company;
+	$comment_published = (comment_publishdate_get($cid))? comment_publishdate_get($cid): NULL;
+	
+	$header = NULL;
+	$rows = array(
+		array(t('Subject'), $comment->subject),
+		array(t('Post date'), date('d/m/Y h:i', $comment->timestamp)),
+		array(t('User'), $comment_user_details),
+		array(t('Comment'),	$comment->comment),
+		array(t('Published on'), ($comment_published)? date('d/m/Y h:i', $comment_published): t('Not published yet') ),
+	);
+	return theme('table', $header , $rows , $attributes = array('id' => 'single-comment'));
+	
+}
+

@@ -1,0 +1,49 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Installs the comment_publishdate module.
+ *
+ * Creates a database where we store the publish datestamp.
+ */
+ 
+ /**
+ * Implementation of hook_schema().
+ */
+function comment_publishdate_schema() {
+  $schema['comment_publishdate'] = array(
+    'fields' => array(
+      'cid' => array(
+        'type'     => 'int',
+        'size'     => 'normal',
+        'not null' => TRUE,
+      ),
+      'publishdate' => array(
+        'type'     => 'int',
+        'size'     => 'normal',
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('cid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function comment_publishdate_install() {
+  // Create tables.
+  drupal_install_schema('comment_publishdate');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function comment_publishdate_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('comment_publishdate');
+}
+
